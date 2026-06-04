@@ -11,11 +11,23 @@ from app.config import Settings
 
 LOGGER = logging.getLogger(__name__)
 
-BRAZILIAN_PORTUGUESE_INITIAL_PROMPT = (
-    "Esta e uma reuniao tecnica em portugues do Brasil sobre desenvolvimento de software, "
-    "requisitos, regras de negocio, bugs, APIs, banco de dados, integracoes, refinamento, "
-    "criterios de aceite, arquitetura, testes e impactos tecnicos."
+TECHNICAL_MEETING_INITIAL_PROMPT_TEMPLATE = (
+    "This is a technical meeting in {language_name}. The discussion may include software development, "
+    "requirements, business rules, bugs, APIs, databases, integrations, refinement, acceptance criteria, "
+    "architecture, tests, technical impacts, observability, permissions, logs, and delivery risks."
 )
+
+LANGUAGE_NAMES = {
+    "pt": "Brazilian Portuguese",
+    "pt-br": "Brazilian Portuguese",
+    "en": "English",
+    "en-us": "English",
+    "en-gb": "English",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "it": "Italian",
+}
 
 
 @dataclass(frozen=True)
@@ -35,6 +47,7 @@ class WhisperTranscriber:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._model = None
+        self._initial_prompt = _resolve_initial_prompt(settings)
 
     def load(self) -> None:
         if self._model is not None:
@@ -45,8 +58,9 @@ class WhisperTranscriber:
             raise RuntimeError("faster-whisper is required for real local transcription.") from exc
 
         LOGGER.info(
-            "Loading faster-whisper model '%s' on %s with compute type %s.",
+            "Loading faster-whisper model '%s' for language '%s' on %s with compute type %s.",
             self._settings.whisper_model_size,
+            self._settings.whisper_language,
             self._settings.whisper_device,
             self._settings.whisper_compute_type,
         )
@@ -72,9 +86,9 @@ class WhisperTranscriber:
 
             segments_iterator, _info = self._model.transcribe(
                 temp_path,
-                language="pt",
+                language=self._settings.whisper_language,
                 task="transcribe",
-                initial_prompt=BRAZILIAN_PORTUGUESE_INITIAL_PROMPT,
+                initial_prompt=self._initial_prompt,
                 vad_filter=True,
                 beam_size=5,
             )
@@ -95,3 +109,16 @@ class WhisperTranscriber:
                     os.unlink(temp_path)
                 except OSError:
                     LOGGER.warning("Could not delete temporary WAV file: %s", temp_path)
+
+
+def _resolve_initial_prompt(settings: Settings) -> str:
+    language_name = _resolve_language_name(settings.whisper_language)
+    return TECHNICAL_MEETING_INITIAL_PROMPT_TEMPLATE.format(language_name=language_name)
+
+
+def _resolve_language_name(language_code: str) -> str:
+    normalized = language_code.strip().casefold()
+    if normalized in LANGUAGE_NAMES:
+        return LANGUAGE_NAMES[normalized]
+    base_language = normalized.split("-", maxsplit=1)[0]
+    return LANGUAGE_NAMES.get(base_language, language_code)

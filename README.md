@@ -51,6 +51,7 @@ AUDIO_CHUNK_SECONDS=5
 AUDIO_FRAMES_PER_BUFFER=1024
 AUDIO_SILENCE_RMS_THRESHOLD=120
 WHISPER_MODEL_SIZE=small
+WHISPER_LANGUAGE=pt
 WHISPER_DEVICE=cpu
 WHISPER_COMPUTE_TYPE=int8
 AI_PROVIDER=stackspot
@@ -73,10 +74,14 @@ SUMMARIES_DIR=summaries
 
 Set `WHISPER_MODEL_SIZE` to a faster or more accurate model supported by faster-whisper, such as `tiny`, `base`, `small`, `medium`, or `large-v3`.
 
+Set `WHISPER_LANGUAGE` to the language code used by faster-whisper. The default is `pt` for Brazilian Portuguese meetings. Examples: `pt`, `en`, `es`.
+The app automatically builds a generic technical-meeting prompt using `WHISPER_LANGUAGE`, for example Brazilian Portuguese for `pt`, English for `en`, or Spanish for `es`.
+
 CPU example:
 
 ```env
 WHISPER_MODEL_SIZE=small
+WHISPER_LANGUAGE=pt
 WHISPER_DEVICE=cpu
 WHISPER_COMPUTE_TYPE=int8
 ```

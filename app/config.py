@@ -17,6 +17,7 @@ class Settings:
     audio_frames_per_buffer: int
     audio_silence_rms_threshold: int
     whisper_model_size: str
+    whisper_language: str
     whisper_device: str
     whisper_compute_type: str
     question_generation_interval_seconds: float
@@ -77,6 +78,7 @@ def load_settings() -> Settings:
         audio_frames_per_buffer=_get_int("AUDIO_FRAMES_PER_BUFFER", 1024),
         audio_silence_rms_threshold=_get_int("AUDIO_SILENCE_RMS_THRESHOLD", 120),
         whisper_model_size=os.getenv("WHISPER_MODEL_SIZE", "small").strip() or "small",
+        whisper_language=os.getenv("WHISPER_LANGUAGE", "pt").strip() or "pt",
         whisper_device=os.getenv("WHISPER_DEVICE", "cpu").strip() or "cpu",
         whisper_compute_type=os.getenv("WHISPER_COMPUTE_TYPE", "int8").strip() or "int8",
         question_generation_interval_seconds=_get_float("QUESTION_GENERATION_INTERVAL_SECONDS", 30.0),

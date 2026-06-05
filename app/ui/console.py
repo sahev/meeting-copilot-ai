@@ -26,6 +26,7 @@ class ConsoleState:
     transcripts: list[str] = field(default_factory=list)
     meeting_context: MeetingContext = field(default_factory=MeetingContext)
     generated_questions: GeneratedQuestions = field(default_factory=GeneratedQuestions)
+    ai_status: str = "Press Ctrl+G to send recent context to AI."
     error: str | None = None
 
 
@@ -61,6 +62,7 @@ class ThreadSafeConsoleState:
                 transcripts=list(self._state.transcripts),
                 meeting_context=self._state.meeting_context.model_copy(deep=True),
                 generated_questions=self._state.generated_questions.model_copy(deep=True),
+                ai_status=self._state.ai_status,
                 error=self._state.error,
             )
 
@@ -73,6 +75,7 @@ def render_console(state: ConsoleState) -> Group:
     status.add_row("Transcribing", "yes" if state.transcribing else "no")
     status.add_row("Consumed tokens", _format_tokens(state.consumed_tokens))
     status.add_row("Meeting duration", _format_duration(state.meeting_started_at))
+    status.add_row("AI status", state.ai_status)
 
     transcript_table = Table.grid()
     transcript_table.add_column()
@@ -93,7 +96,7 @@ def render_console(state: ConsoleState) -> Group:
 
     return Group(
         *panels,
-        Text("Press Ctrl+C to finish the current meeting and return to the menu.", style="dim"),
+        Text("Press F8 or Ctrl+G to generate questions. Press Ctrl+C to finish the current meeting.", style="dim"),
     )
 
 

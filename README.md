@@ -72,7 +72,8 @@ GEMINI_MODEL=gemini-2.5-flash
 GROQ_API_URL=https://api.groq.com/openai/v1/chat/completions
 GROQ_API_KEY=
 GROQ_MODEL=llama-3.3-70b-versatile
-QUESTION_GENERATION_INTERVAL_SECONDS=30
+CONTEXT_REFRESH_INTERVAL_SECONDS=30
+QUESTION_CONTEXT_SNAPSHOT_LIMIT=3
 DATABASE_PATH=meeting_copilot.db
 SUMMARIES_DIR=summaries
 ```
@@ -184,9 +185,15 @@ The Devin endpoint must return either raw text or JSON containing one of these t
 
 Gemini uses the Google `generateContent` REST shape. Groq uses the OpenAI-compatible chat completions shape.
 
-### Question generation interval
+### Context and question generation
 
-`QUESTION_GENERATION_INTERVAL_SECONDS` controls how often the app asks the AI provider for new useful questions after context changes. The default is `30`.
+`CONTEXT_REFRESH_INTERVAL_SECONDS` controls how often the app sends the accumulated transcript text to the AI provider to update the structured meeting context. The default is `30`.
+
+Questions are generated only on demand. While a meeting is running, press `F8` or `Ctrl+G` to send the recent structured context to the AI provider. The `STATUS` panel shows when the context was sent and when questions return.
+
+`QUESTION_CONTEXT_SNAPSHOT_LIMIT` controls how many recent context snapshots are used for on-demand question generation. The default is `3`.
+
+`QUESTION_GENERATION_INTERVAL_SECONDS` is still accepted as a fallback for older `.env` files, but question generation itself is no longer automatic.
 
 ### Persistence
 

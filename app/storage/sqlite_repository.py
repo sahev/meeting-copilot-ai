@@ -44,6 +44,24 @@ class SQLiteRepository:
                 (meeting_id, _now_iso(), context.model_dump_json()),
             )
 
+    def get_recent_context_snapshots(self, meeting_id: int, limit: int) -> list[MeetingContext]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select context_json
+                from context_snapshots
+                where meeting_id = ?
+                order by id desc
+                limit ?
+                """,
+                (meeting_id, limit),
+            ).fetchall()
+
+        contexts: list[MeetingContext] = []
+        for (context_json,) in reversed(rows):
+            contexts.append(MeetingContext.model_validate_json(context_json))
+        return contexts
+
     def save_generated_questions(self, meeting_id: int, questions: GeneratedQuestions) -> None:
         with self._connect() as connection:
             connection.execute(

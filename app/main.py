@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import msvcrt
 import queue
 import threading
 import time
@@ -19,7 +20,7 @@ from app.audio.capture import WasapiLoopbackCapture
 from app.config import load_settings
 from app.config import PROJECT_ROOT
 from app.context.context_builder import ContextPipeline
-from app.context.meeting_context import MeetingContext
+from app.context.meeting_context import ContextUpdate, MeetingContext
 from app.context.context_store import MeetingContextStore
 from app.diagnostics import render_diagnostics, run_diagnostics
 from app.services.agent_registry import AgentRegistry
@@ -58,7 +59,10 @@ class MeetingRuntime:
         self.registry.register("question_generator", self.question_generator_agent)
         self.registry.register("summary", self.summary_agent)
         self.context_pipeline = ContextPipeline(self.context_store, self.context_builder_agent)
-        self.last_question_generation_at = 0.0
+        self.last_context_refresh_at = time.monotonic()
+        self.pending_context_transcripts: list[str] = []
+        self.pending_context_lock = threading.Lock()
+        self.question_generation_lock = threading.Lock()
         self.summary_path: Path | None = None
         self._stopped = False
         self._stop_lock = threading.Lock()
@@ -107,6 +111,7 @@ class MeetingRuntime:
                 if result:
                     self.console_state.add_transcript(result.text)
                     self.repository.add_transcription(self.meeting_id, result.text)
+                    self._queue_transcript_for_context(result.text)
             except Exception as exc:
                 logging.exception("Transcription failed.")
                 self.console_state.update(error=str(exc))
@@ -117,7 +122,7 @@ class MeetingRuntime:
 
             if result:
                 try:
-                    self._process_context(result.text)
+                    self._maybe_refresh_context()
                 except Exception as exc:
                     logging.exception("Context pipeline failed.")
                     self.console_state.update(error=f"Context pipeline failed: {exc}")
@@ -126,40 +131,99 @@ class MeetingRuntime:
         self.console_state.update(capturing=False, error=str(exc))
         self.stop_event.set()
 
-    def _process_context(self, transcript: str) -> None:
+    def _queue_transcript_for_context(self, transcript: str) -> None:
+        cleaned = transcript.strip()
+        if not cleaned:
+            return
+        with self.pending_context_lock:
+            self.pending_context_transcripts.append(cleaned)
+
+    def _maybe_refresh_context(self, force: bool = False) -> None:
+        elapsed = time.monotonic() - self.last_context_refresh_at
+        if not force and elapsed < self.settings.context_refresh_interval_seconds:
+            return
+
+        with self.pending_context_lock:
+            batch = list(self.pending_context_transcripts)
+            transcript = "\n".join(batch).strip()
+
+        if not transcript:
+            self.last_context_refresh_at = time.monotonic()
+            return
+
         self.console_state.update(updating_context=True)
         try:
             context = self.context_pipeline.process_transcript(transcript, self.settings.meeting_topic)
             self.repository.save_context_snapshot(self.meeting_id, context)
             self.console_state.update(meeting_context=context)
+            with self.pending_context_lock:
+                del self.pending_context_transcripts[: len(batch)]
+            self.last_context_refresh_at = time.monotonic()
         finally:
             self._sync_consumed_tokens()
             self.console_state.update(updating_context=False)
 
-        elapsed = time.monotonic() - self.last_question_generation_at
-        if elapsed < self.settings.question_generation_interval_seconds:
+    def _request_question_generation(self) -> None:
+        if self.question_generation_lock.locked():
+            self.console_state.update(ai_status="Question generation is already running.")
             return
 
-        if not _has_clear_question_context(context):
-            logging.info("Skipping question generation because the context is not mature enough yet.")
+        worker = threading.Thread(target=self._generate_questions_from_recent_contexts, name="question-worker", daemon=True)
+        worker.start()
+
+    def _generate_questions_from_recent_contexts(self) -> None:
+        if not self.question_generation_lock.acquire(blocking=False):
             return
 
-        self.console_state.update(generating_questions=True)
+        sent_at = time.strftime("%H:%M:%S")
+        self.console_state.update(
+            ai_status=f"Sent recent context to AI at {sent_at}.",
+            generating_questions=True,
+        )
         try:
+            recent_contexts = self.repository.get_recent_context_snapshots(
+                self.meeting_id,
+                self.settings.question_context_snapshot_limit,
+            )
+            if not recent_contexts:
+                snapshot = self.context_store.snapshot()
+                if _has_clear_question_context(snapshot):
+                    recent_contexts = [snapshot]
+
+            if not recent_contexts:
+                self.console_state.update(ai_status="No structured context available to send yet.")
+                return
+
+            context = _combine_recent_contexts(recent_contexts)
+            if not _has_clear_question_context(context):
+                logging.info("Skipping question generation because the context is not mature enough yet.")
+                self.console_state.update(ai_status="Recent context is not mature enough for questions yet.")
+                return
+
             questions = self.question_generator_agent.generate_questions(context, self.settings.meeting_topic)
             updated_context = self.context_store.merge_questions(questions)
             self.repository.save_generated_questions(self.meeting_id, questions)
             self.repository.save_context_snapshot(self.meeting_id, updated_context)
-            self.last_question_generation_at = time.monotonic()
             self.console_state.update(
                 meeting_context=updated_context,
                 generated_questions=updated_context.generated_questions,
+                ai_status=f"AI returned questions at {time.strftime('%H:%M:%S')}.",
             )
+        except Exception as exc:
+            logging.exception("Question generation failed.")
+            self.console_state.update(error=f"Question generation failed: {exc}", ai_status="Question generation failed.")
         finally:
             self._sync_consumed_tokens()
             self.console_state.update(generating_questions=False)
+            self.question_generation_lock.release()
 
     def _finalize_meeting(self) -> None:
+        try:
+            self._maybe_refresh_context(force=True)
+        except Exception as exc:
+            logging.exception("Final context refresh failed.")
+            self.console_state.update(error=f"Final context refresh failed: {exc}")
+
         context = self.context_store.snapshot()
         if not context.raw_transcript_tail:
             logging.info("No transcripts were captured; skipping final summary generation.")
@@ -186,6 +250,8 @@ class MeetingRuntime:
         with Live(render_console(self.console_state.snapshot()), console=console, refresh_per_second=4) as live:
             try:
                 while not self.stop_event.is_set():
+                    if _question_shortcut_pressed():
+                        self._request_question_generation()
                     live.update(render_console(self.console_state.snapshot()))
                     time.sleep(0.25)
             except KeyboardInterrupt:
@@ -213,6 +279,30 @@ def _has_clear_question_context(context: MeetingContext) -> bool:
     has_topic = bool(getattr(context, "current_topic", "").strip())
     has_recent_transcript = len(getattr(context, "raw_transcript_tail", [])) >= 2
     return signal_count >= 2 and (has_topic or has_recent_transcript)
+
+
+def _combine_recent_contexts(contexts: list[MeetingContext]) -> MeetingContext:
+    combined = MeetingContext()
+    for context in contexts:
+        update = ContextUpdate.model_validate(context.model_dump(exclude={"generated_questions", "raw_transcript_tail"}))
+        combined.merge_update(update)
+        for transcript in context.raw_transcript_tail:
+            combined.add_transcript(transcript)
+    return combined
+
+
+def _question_shortcut_pressed() -> bool:
+    pressed = False
+    while msvcrt.kbhit():
+        key = msvcrt.getwch()
+        if key in {"\x00", "\xe0"}:
+            scan_code = msvcrt.getwch() if msvcrt.kbhit() else ""
+            pressed = pressed or scan_code == "B"  # F8 on Windows terminals.
+            continue
+        if key == "\x03":
+            raise KeyboardInterrupt
+        pressed = pressed or key == "\x07"  # Ctrl+G.
+    return pressed
 
 
 def main() -> None:

@@ -22,7 +22,9 @@ class Settings:
     whisper_device: str
     whisper_compute_type: str
     vosk_model_path: Path | None
+    context_refresh_interval_seconds: float
     question_generation_interval_seconds: float
+    question_context_snapshot_limit: int
     database_path: Path
     summaries_dir: Path
     ai_provider: str | None
@@ -110,7 +112,12 @@ def load_settings() -> Settings:
         whisper_device=os.getenv("WHISPER_DEVICE", "cpu").strip() or "cpu",
         whisper_compute_type=os.getenv("WHISPER_COMPUTE_TYPE", "int8").strip() or "int8",
         vosk_model_path=_optional_project_path("VOSK_MODEL_PATH"),
+        context_refresh_interval_seconds=_get_float(
+            "CONTEXT_REFRESH_INTERVAL_SECONDS",
+            _get_float("QUESTION_GENERATION_INTERVAL_SECONDS", 30.0),
+        ),
         question_generation_interval_seconds=_get_float("QUESTION_GENERATION_INTERVAL_SECONDS", 30.0),
+        question_context_snapshot_limit=_get_int("QUESTION_CONTEXT_SNAPSHOT_LIMIT", 3),
         database_path=PROJECT_ROOT / os.getenv("DATABASE_PATH", "meeting_copilot.db"),
         summaries_dir=PROJECT_ROOT / os.getenv("SUMMARIES_DIR", "summaries"),
         ai_provider=_optional("AI_PROVIDER"),

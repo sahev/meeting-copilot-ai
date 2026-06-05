@@ -25,7 +25,7 @@ from app.diagnostics import render_diagnostics, run_diagnostics
 from app.services.agent_registry import AgentRegistry
 from app.services.prompt_loader import PromptLoader
 from app.storage.sqlite_repository import SQLiteRepository, write_summary_file
-from app.transcription.whisper_transcriber import WhisperTranscriber
+from app.transcription.transcriber_factory import build_transcriber
 from app.ui.console import ThreadSafeConsoleState, render_console
 
 
@@ -44,7 +44,7 @@ class MeetingRuntime:
         self.audio_queue = AudioChunkQueue()
         self.console_state = ThreadSafeConsoleState()
         self.capture = WasapiLoopbackCapture(self.settings, self.audio_queue, on_error=self._capture_error)
-        self.transcriber = WhisperTranscriber(self.settings)
+        self.transcriber = build_transcriber(self.settings)
         self.provider = build_ai_provider(self.settings)
         self.repository = SQLiteRepository(self.settings.database_path)
         self.meeting_id = self.repository.create_meeting(self.settings.meeting_topic)

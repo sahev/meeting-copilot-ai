@@ -1,13 +1,13 @@
 # Meeting Copilot CLI
 
-Meeting Copilot CLI captures real Windows output audio through WASAPI Loopback, transcribes Brazilian Portuguese audio locally with `faster-whisper`, and displays the live transcript in CMD/PowerShell using `rich`.
+Meeting Copilot CLI captures real Windows output audio through WASAPI Loopback, transcribes Brazilian Portuguese audio locally with `faster-whisper` or `Vosk`, and displays the live transcript in CMD/PowerShell using `rich`.
 
 ## Requirements
 
 - Windows.
 - Python 3.10 to 3.12. Python 3.14 is not recommended because PyAudioWPatch and ML runtime wheels may not be published for it yet.
 - A working Windows output device.
-- CPU or GPU resources for local Whisper transcription.
+- CPU or GPU resources for local transcription.
 
 The app does not require external `.exe`, `.msi`, drivers, or desktop software. Python packages are installed with `pip`.
 
@@ -51,9 +51,11 @@ AUDIO_CHUNK_SECONDS=5
 AUDIO_FRAMES_PER_BUFFER=1024
 AUDIO_SILENCE_RMS_THRESHOLD=120
 WHISPER_MODEL_SIZE=small
+TRANSCRIPTION_PROVIDER=faster_whisper
 WHISPER_LANGUAGE=pt
 WHISPER_DEVICE=cpu
 WHISPER_COMPUTE_TYPE=int8
+VOSK_MODEL_PATH=models/vosk-model-small-pt-0.3
 AI_PROVIDER=stackspot
 STACKSPOT_AUTH_URL=https://idm.stackspot.com/YOUR_ACCOUNT_REALM/oidc/oauth/token
 STACKSPOT_CLIENT_ID=
@@ -74,6 +76,19 @@ QUESTION_GENERATION_INTERVAL_SECONDS=30
 DATABASE_PATH=meeting_copilot.db
 SUMMARIES_DIR=summaries
 ```
+
+### Transcription provider
+
+Use `TRANSCRIPTION_PROVIDER=faster_whisper` for best quality when the faster-whisper model can be downloaded or copied locally.
+
+Use `TRANSCRIPTION_PROVIDER=vosk` when Hugging Face or large model files are blocked in your environment. Vosk runs offline with a much smaller Portuguese/Brazilian Portuguese model:
+
+```env
+TRANSCRIPTION_PROVIDER=vosk
+VOSK_MODEL_PATH=models/vosk-model-small-pt-0.3
+```
+
+Download `vosk-model-small-pt-0.3.zip`, extract it, and point `VOSK_MODEL_PATH` to the extracted folder. The official Vosk model list reports this small pt-BR model at about 31 MB.
 
 ### Whisper model
 
@@ -185,4 +200,5 @@ Gemini uses the Google `generateContent` REST shape. Groq uses the OpenAI-compat
 - Transcription quality depends on meeting audio quality.
 - Local transcription consumes CPU or GPU.
 - The first Whisper run may download model files through faster-whisper.
+- Vosk is lighter and easier to move through restricted networks, but transcription quality is usually lower than Whisper.
 - The generic Devin endpoint contract may need small adaptation depending on the exact API shape you use.

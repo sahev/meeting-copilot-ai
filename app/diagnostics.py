@@ -25,6 +25,7 @@ def run_diagnostics(settings: Settings) -> list[DiagnosticCheck]:
     checks: list[DiagnosticCheck] = []
     checks.append(_check_python_version())
     checks.extend(_check_python_packages())
+    checks.append(_check_transcription_configuration(settings))
     checks.append(_check_prompts())
     checks.append(_check_ai_configuration(settings))
     checks.append(_check_sqlite(settings))
@@ -61,7 +62,6 @@ def _check_python_version() -> DiagnosticCheck:
 def _check_python_packages() -> list[DiagnosticCheck]:
     packages = {
         "PyAudioWPatch": "pyaudiowpatch",
-        "faster-whisper": "faster_whisper",
         "rich": "rich",
         "httpx": "httpx",
         "pydantic": "pydantic",
@@ -73,6 +73,34 @@ def _check_python_packages() -> list[DiagnosticCheck]:
         detail = "Installed." if ok else f"Missing. Run pip install -r requirements.txt with Python 3.10 to 3.12."
         checks.append(DiagnosticCheck(display_name, ok, detail))
     return checks
+
+
+def _check_transcription_configuration(settings: Settings) -> DiagnosticCheck:
+    provider = settings.transcription_provider.casefold().replace("-", "_")
+    if provider in {"faster_whisper", "whisper"}:
+        ok = importlib.util.find_spec("faster_whisper") is not None
+        detail = (
+            f"faster-whisper is configured with model {settings.whisper_model_size}."
+            if ok
+            else "Missing faster-whisper. Run pip install -r requirements.txt."
+        )
+        return DiagnosticCheck("Transcription provider", ok, detail)
+    if provider == "vosk":
+        package_ok = importlib.util.find_spec("vosk") is not None
+        model_ok = bool(settings.vosk_model_path and settings.vosk_model_path.exists())
+        ok = package_ok and model_ok
+        if ok:
+            detail = f"Vosk is configured with model path {settings.vosk_model_path}."
+        elif not package_ok:
+            detail = "Missing vosk. Run pip install -r requirements.txt."
+        else:
+            detail = "Set VOSK_MODEL_PATH to the extracted Vosk model folder."
+        return DiagnosticCheck("Transcription provider", ok, detail)
+    return DiagnosticCheck(
+        "Transcription provider",
+        False,
+        "Set TRANSCRIPTION_PROVIDER to faster_whisper or vosk.",
+    )
 
 
 def _check_prompts() -> DiagnosticCheck:

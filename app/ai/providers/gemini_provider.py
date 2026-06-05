@@ -24,6 +24,11 @@ class GeminiProvider(BaseAiProvider):
         self._api_key = api_key
         self._model = model
         self._timeout_seconds = timeout_seconds
+        self._total_consumed_tokens = 0
+
+    @property
+    def total_consumed_tokens(self) -> int:
+        return self._total_consumed_tokens
 
     def generate(self, prompt: str, payload: dict) -> str:
         request_body = {
@@ -55,7 +60,9 @@ class GeminiProvider(BaseAiProvider):
                     response = client.post(url, params=params, json=request_body)
                     response.raise_for_status()
                 LOGGER.info("Gemini provider returned HTTP %s.", response.status_code)
-                return _extract_gemini_text(response)
+                data = response.json()
+                self._record_token_usage(data)
+                return _extract_gemini_text(data)
             except Exception as exc:
                 last_error = exc
                 LOGGER.exception("Gemini provider request failed on attempt %s.", attempt)
@@ -65,9 +72,16 @@ class GeminiProvider(BaseAiProvider):
         assert last_error is not None
         raise RuntimeError(f"Gemini provider failed after retries: {last_error}") from last_error
 
+    def _record_token_usage(self, data: dict) -> None:
+        usage = data.get("usageMetadata")
+        if not isinstance(usage, dict):
+            return
+        total_tokens = usage.get("totalTokenCount")
+        if isinstance(total_tokens, int | float):
+            self._total_consumed_tokens += int(total_tokens)
 
-def _extract_gemini_text(response: httpx.Response) -> str:
-    data = response.json()
+
+def _extract_gemini_text(data: dict) -> str:
     candidates = data.get("candidates")
     if not candidates:
         raise RuntimeError("Gemini response did not contain candidates.")

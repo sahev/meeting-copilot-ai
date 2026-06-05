@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from dataclasses import dataclass, field
 
 from app.context.meeting_context import GeneratedQuestions, MeetingContext
@@ -14,6 +15,8 @@ from rich.text import Text
 class ConsoleState:
     capturing: bool = False
     transcribing: bool = False
+    meeting_started_at: float | None = None
+    consumed_tokens: int = 0
     updating_context: bool = False
     generating_questions: bool = False
     generating_summary: bool = False
@@ -47,6 +50,8 @@ class ThreadSafeConsoleState:
             return ConsoleState(
                 capturing=self._state.capturing,
                 transcribing=self._state.transcribing,
+                meeting_started_at=self._state.meeting_started_at,
+                consumed_tokens=self._state.consumed_tokens,
                 updating_context=self._state.updating_context,
                 generating_questions=self._state.generating_questions,
                 generating_summary=self._state.generating_summary,
@@ -66,14 +71,8 @@ def render_console(state: ConsoleState) -> Group:
     status.add_column()
     status.add_row("Capturing", "yes" if state.capturing else "no")
     status.add_row("Transcribing", "yes" if state.transcribing else "no")
-    status.add_row("Updating context", "yes" if state.updating_context else "no")
-    status.add_row("Generating questions", "yes" if state.generating_questions else "no")
-    status.add_row("Generating summary", "yes" if state.generating_summary else "no")
-    status.add_row("Audio queue", str(state.audio_queue_size))
-    if state.summary_path:
-        status.add_row("Summary", state.summary_path)
-    if state.error:
-        status.add_row("Error", Text(state.error, style="red"))
+    status.add_row("Consumed tokens", _format_tokens(state.consumed_tokens))
+    status.add_row("Meeting duration", _format_duration(state.meeting_started_at))
 
     transcript_table = Table.grid()
     transcript_table.add_column()
@@ -83,11 +82,17 @@ def render_console(state: ConsoleState) -> Group:
     else:
         transcript_table.add_row(Text("Waiting for real meeting audio...", style="dim"))
 
-    return Group(
+    panels = [
         Panel(status, title="STATUS", border_style="cyan"),
         Panel(_render_context(state.meeting_context), title="CONTEXT", border_style="blue"),
         Panel(_render_questions(state.generated_questions), title="GENERATED QUESTIONS", border_style="yellow"),
         Panel(transcript_table, title="TRANSCRIPT TAIL", border_style="magenta"),
+    ]
+    if state.error:
+        panels.append(Panel(Text(state.error, style="red"), title="ERROR", border_style="red"))
+
+    return Group(
+        *panels,
         Text("Press Ctrl+C to finish the current meeting and return to the menu.", style="dim"),
     )
 
@@ -122,3 +127,21 @@ def _compact_list(items: list[str], limit: int = 4) -> str:
         return "-"
     visible = items[-limit:]
     return "\n".join(f"- {item}" for item in visible)
+
+
+def _format_tokens(tokens: int) -> str:
+    if tokens < 1_000:
+        return str(tokens)
+    if tokens < 10_000:
+        value = tokens / 1_000
+        return f"{value:.1f}k".replace(".0k", "k")
+    return f"{round(tokens / 1_000)}k"
+
+
+def _format_duration(started_at: float | None) -> str:
+    if started_at is None:
+        return "00:00"
+    elapsed_seconds = max(0, int(time.monotonic() - started_at))
+    hours, remainder = divmod(elapsed_seconds, 3600)
+    minutes = remainder // 60
+    return f"{hours:02d}:{minutes:02d}"

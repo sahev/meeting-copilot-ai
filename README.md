@@ -55,8 +55,13 @@ WHISPER_LANGUAGE=pt
 WHISPER_DEVICE=cpu
 WHISPER_COMPUTE_TYPE=int8
 AI_PROVIDER=stackspot
-STACKSPOT_API_URL=
-STACKSPOT_API_KEY=
+STACKSPOT_AUTH_URL=https://idm.stackspot.com/YOUR_ACCOUNT_REALM/oidc/oauth/token
+STACKSPOT_CLIENT_ID=
+STACKSPOT_CLIENT_SECRET=
+STACKSPOT_AGENT_URL=https://genai-inference-app.stackspot.com
+STACKSPOT_AGENT_ID=
+STACKSPOT_USE_CONVERSATION=false
+STACKSPOT_STREAMING=false
 DEVIN_API_URL=
 DEVIN_API_KEY=
 GEMINI_API_URL=https://generativelanguage.googleapis.com/v1beta
@@ -108,8 +113,13 @@ Structured context and generated questions require a real AI provider. If no mat
 
 ```env
 AI_PROVIDER=stackspot
-STACKSPOT_API_URL=
-STACKSPOT_API_KEY=
+STACKSPOT_AUTH_URL=https://idm.stackspot.com/YOUR_ACCOUNT_REALM/oidc/oauth/token
+STACKSPOT_CLIENT_ID=
+STACKSPOT_CLIENT_SECRET=
+STACKSPOT_AGENT_URL=https://genai-inference-app.stackspot.com
+STACKSPOT_AGENT_ID=
+STACKSPOT_USE_CONVERSATION=false
+STACKSPOT_STREAMING=false
 ```
 
 Select Devin by setting:
@@ -138,7 +148,15 @@ GROQ_API_KEY=
 GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
-StackSpot and Devin use the generic JSON provider shape and send:
+StackSpot uses the official Agent API flow: it exchanges `STACKSPOT_CLIENT_ID` and `STACKSPOT_CLIENT_SECRET` for an access token at `STACKSPOT_AUTH_URL`, then calls:
+
+```text
+POST {STACKSPOT_AGENT_URL}/v1/agent/{STACKSPOT_AGENT_ID}/chat
+```
+
+The request sends `user_prompt`, `stackspot_knowledge`, `return_ks_in_response`, and `streaming`. Keep `STACKSPOT_STREAMING=false` unless you adapt the app to consume SSE streams. Set `STACKSPOT_USE_CONVERSATION=true` if you want the provider to store the returned `conversation_id` and reuse it on later calls in the same process.
+
+Devin uses the generic JSON provider shape and sends:
 
 ```json
 {
@@ -147,7 +165,7 @@ StackSpot and Devin use the generic JSON provider shape and send:
 }
 ```
 
-Those endpoints must return either raw text or JSON containing one of these text fields: `output`, `content`, `text`, `message`, `answer`, or `response`.
+The Devin endpoint must return either raw text or JSON containing one of these text fields: `output`, `content`, `text`, `message`, `answer`, or `response`.
 
 Gemini uses the Google `generateContent` REST shape. Groq uses the OpenAI-compatible chat completions shape.
 
@@ -167,4 +185,4 @@ Gemini uses the Google `generateContent` REST shape. Groq uses the OpenAI-compat
 - Transcription quality depends on meeting audio quality.
 - Local transcription consumes CPU or GPU.
 - The first Whisper run may download model files through faster-whisper.
-- The generic StackSpot or Devin endpoint contract may need small adaptation depending on the exact API shape you use.
+- The generic Devin endpoint contract may need small adaptation depending on the exact API shape you use.

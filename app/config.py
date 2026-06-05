@@ -24,8 +24,13 @@ class Settings:
     database_path: Path
     summaries_dir: Path
     ai_provider: str | None
-    stackspot_api_url: str | None
-    stackspot_api_key: str | None
+    stackspot_auth_url: str | None
+    stackspot_client_id: str | None
+    stackspot_client_secret: str | None
+    stackspot_agent_url: str
+    stackspot_agent_id: str | None
+    stackspot_use_conversation: bool
+    stackspot_streaming: bool
     devin_api_url: str | None
     devin_api_key: str | None
     gemini_api_url: str
@@ -69,6 +74,18 @@ def _optional(name: str) -> str | None:
     return value.strip()
 
 
+def _get_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    normalized = raw.strip().casefold()
+    if normalized in {"1", "true", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "n", "off"}:
+        return False
+    raise ValueError(f"{name} must be a boolean value.")
+
+
 def load_settings() -> Settings:
     load_dotenv(PROJECT_ROOT / ".env")
 
@@ -85,8 +102,17 @@ def load_settings() -> Settings:
         database_path=PROJECT_ROOT / os.getenv("DATABASE_PATH", "meeting_copilot.db"),
         summaries_dir=PROJECT_ROOT / os.getenv("SUMMARIES_DIR", "summaries"),
         ai_provider=_optional("AI_PROVIDER"),
-        stackspot_api_url=_optional("STACKSPOT_API_URL"),
-        stackspot_api_key=_optional("STACKSPOT_API_KEY"),
+        stackspot_auth_url=_optional("STACKSPOT_AUTH_URL"),
+        stackspot_client_id=_optional("STACKSPOT_CLIENT_ID"),
+        stackspot_client_secret=_optional("STACKSPOT_CLIENT_SECRET"),
+        stackspot_agent_url=os.getenv(
+            "STACKSPOT_AGENT_URL",
+            "https://genai-inference-app.stackspot.com",
+        ).strip()
+        or "https://genai-inference-app.stackspot.com",
+        stackspot_agent_id=_optional("STACKSPOT_AGENT_ID"),
+        stackspot_use_conversation=_get_bool("STACKSPOT_USE_CONVERSATION", False),
+        stackspot_streaming=_get_bool("STACKSPOT_STREAMING", False),
         devin_api_url=_optional("DEVIN_API_URL"),
         devin_api_key=_optional("DEVIN_API_KEY"),
         gemini_api_url=os.getenv("GEMINI_API_URL", "https://generativelanguage.googleapis.com/v1beta").strip()

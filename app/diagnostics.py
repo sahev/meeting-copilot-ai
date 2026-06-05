@@ -87,8 +87,18 @@ def _check_prompts() -> DiagnosticCheck:
 def _check_ai_configuration(settings: Settings) -> DiagnosticCheck:
     provider = (settings.ai_provider or "").casefold()
     if provider == "stackspot":
-        ok = bool(settings.stackspot_api_url and settings.stackspot_api_key)
-        detail = "StackSpot URL and API key are configured." if ok else "Set STACKSPOT_API_URL and STACKSPOT_API_KEY."
+        ok = bool(
+            settings.stackspot_auth_url
+            and settings.stackspot_client_id
+            and settings.stackspot_client_secret
+            and settings.stackspot_agent_url
+            and settings.stackspot_agent_id
+        )
+        detail = (
+            f"StackSpot Agent API is configured for agent {settings.stackspot_agent_id}."
+            if ok
+            else "Set STACKSPOT_AUTH_URL, STACKSPOT_CLIENT_ID, STACKSPOT_CLIENT_SECRET, and STACKSPOT_AGENT_ID."
+        )
         return DiagnosticCheck("AI provider", ok, detail)
     if provider == "devin":
         ok = bool(settings.devin_api_url and settings.devin_api_key)

@@ -67,7 +67,7 @@ class MeetingRuntime:
 
     def start(self) -> None:
         self.stop_event.clear()
-        self.console_state.update(capturing=True, transcribing=False)
+        self.console_state.update(capturing=True, transcribing=False, meeting_started_at=time.monotonic())
         self.capture.start()
         self.worker = threading.Thread(target=self._transcription_loop, name="transcription-worker", daemon=True)
         self.worker.start()
@@ -133,6 +133,7 @@ class MeetingRuntime:
             self.repository.save_context_snapshot(self.meeting_id, context)
             self.console_state.update(meeting_context=context)
         finally:
+            self._sync_consumed_tokens()
             self.console_state.update(updating_context=False)
 
         elapsed = time.monotonic() - self.last_question_generation_at
@@ -155,6 +156,7 @@ class MeetingRuntime:
                 generated_questions=updated_context.generated_questions,
             )
         finally:
+            self._sync_consumed_tokens()
             self.console_state.update(generating_questions=False)
 
     def _finalize_meeting(self) -> None:
@@ -177,6 +179,7 @@ class MeetingRuntime:
             self.console_state.update(error=f"Final summary failed: {exc}")
             console.print(f"[red]Final summary failed:[/red] {exc}")
         finally:
+            self._sync_consumed_tokens()
             self.console_state.update(generating_summary=False)
 
     def _run_live_view(self) -> None:
@@ -188,6 +191,9 @@ class MeetingRuntime:
             except KeyboardInterrupt:
                 console.print("\nFinishing meeting...")
                 self.stop()
+
+    def _sync_consumed_tokens(self) -> None:
+        self.console_state.update(consumed_tokens=self.provider.total_consumed_tokens)
 
 
 def _has_clear_question_context(context: MeetingContext) -> bool:

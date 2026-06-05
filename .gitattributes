@@ -1,0 +1,1 @@
+models/faster-whisper-small.zip filter=lfs diff=lfs merge=lfs -text

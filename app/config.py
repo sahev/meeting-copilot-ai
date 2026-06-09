@@ -98,6 +98,16 @@ def _optional_project_path(name: str) -> Path | None:
     return path if path.is_absolute() else PROJECT_ROOT / path
 
 
+def _whisper_model_reference() -> str:
+    value = os.getenv("WHISPER_MODEL_PATH") or os.getenv("WHISPER_MODEL_SIZE", "small")
+    value = value.strip() or "small"
+    path = Path(value)
+    if path.is_absolute():
+        return str(path)
+    project_path = PROJECT_ROOT / path
+    return str(project_path) if project_path.exists() else value
+
+
 def load_settings() -> Settings:
     load_dotenv(PROJECT_ROOT / ".env")
 
@@ -107,7 +117,7 @@ def load_settings() -> Settings:
         audio_frames_per_buffer=_get_int("AUDIO_FRAMES_PER_BUFFER", 1024),
         audio_silence_rms_threshold=_get_int("AUDIO_SILENCE_RMS_THRESHOLD", 120),
         transcription_provider=os.getenv("TRANSCRIPTION_PROVIDER", "faster_whisper").strip() or "faster_whisper",
-        whisper_model_size=os.getenv("WHISPER_MODEL_SIZE", "small").strip() or "small",
+        whisper_model_size=_whisper_model_reference(),
         whisper_language=os.getenv("WHISPER_LANGUAGE", "pt").strip() or "pt",
         whisper_device=os.getenv("WHISPER_DEVICE", "cpu").strip() or "cpu",
         whisper_compute_type=os.getenv("WHISPER_COMPUTE_TYPE", "int8").strip() or "int8",

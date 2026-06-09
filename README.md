@@ -50,7 +50,7 @@ MEETING_TOPIC=
 AUDIO_CHUNK_SECONDS=5
 AUDIO_FRAMES_PER_BUFFER=1024
 AUDIO_SILENCE_RMS_THRESHOLD=120
-WHISPER_MODEL_SIZE=small
+WHISPER_MODEL_PATH=models/faster-whisper-small
 TRANSCRIPTION_PROVIDER=faster_whisper
 WHISPER_LANGUAGE=pt
 WHISPER_DEVICE=cpu
@@ -80,7 +80,7 @@ SUMMARIES_DIR=summaries
 
 ### Transcription provider
 
-Use `TRANSCRIPTION_PROVIDER=faster_whisper` for best quality when the faster-whisper model can be downloaded or copied locally.
+Use `TRANSCRIPTION_PROVIDER=faster_whisper` for best quality with the local faster-whisper model copied into `models/faster-whisper-small`.
 
 Use `TRANSCRIPTION_PROVIDER=vosk` when Hugging Face or large model files are blocked in your environment. Vosk runs offline with a much smaller Portuguese/Brazilian Portuguese model:
 
@@ -93,7 +93,8 @@ Download `vosk-model-small-pt-0.3.zip`, extract it, and point `VOSK_MODEL_PATH` 
 
 ### Whisper model
 
-Set `WHISPER_MODEL_SIZE` to a faster or more accurate model supported by faster-whisper, such as `tiny`, `base`, `small`, `medium`, or `large-v3`.
+Set `WHISPER_MODEL_PATH` to a local faster-whisper model folder, such as `models/faster-whisper-small`.
+`WHISPER_MODEL_SIZE` is still accepted as a fallback for faster-whisper model names such as `tiny`, `base`, `small`, `medium`, or `large-v3`.
 
 Set `WHISPER_LANGUAGE` to the language code used by faster-whisper. The default is `pt` for Brazilian Portuguese meetings. Examples: `pt`, `en`, `es`.
 The app automatically builds a generic technical-meeting prompt using `WHISPER_LANGUAGE`, for example Brazilian Portuguese for `pt`, English for `en`, or Spanish for `es`.
@@ -101,7 +102,7 @@ The app automatically builds a generic technical-meeting prompt using `WHISPER_L
 CPU example:
 
 ```env
-WHISPER_MODEL_SIZE=small
+WHISPER_MODEL_PATH=models/faster-whisper-small
 WHISPER_LANGUAGE=pt
 WHISPER_DEVICE=cpu
 WHISPER_COMPUTE_TYPE=int8
@@ -206,6 +207,6 @@ Questions are generated only on demand. While a meeting is running, press `F8` o
 - Requires Windows WASAPI Loopback.
 - Transcription quality depends on meeting audio quality.
 - Local transcription consumes CPU or GPU.
-- The first Whisper run may download model files through faster-whisper.
+- The first Whisper run may download model files through faster-whisper only when using `WHISPER_MODEL_SIZE` instead of `WHISPER_MODEL_PATH`.
 - Vosk is lighter and easier to move through restricted networks, but transcription quality is usually lower than Whisper.
 - The generic Devin endpoint contract may need small adaptation depending on the exact API shape you use.

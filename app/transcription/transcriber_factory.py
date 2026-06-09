@@ -4,7 +4,6 @@ from typing import Protocol
 
 from app.audio.audio_buffer import AudioChunk
 from app.config import Settings
-from app.transcription.vosk_transcriber import VoskTranscriber
 from app.transcription.whisper_transcriber import TranscriptResult, WhisperTranscriber
 
 
@@ -20,6 +19,4 @@ def build_transcriber(settings: Settings) -> Transcriber:
     provider = settings.transcription_provider.casefold().replace("-", "_")
     if provider in {"faster_whisper", "whisper"}:
         return WhisperTranscriber(settings)
-    if provider == "vosk":
-        return VoskTranscriber(settings)
-    raise RuntimeError("Unknown transcription provider. Set TRANSCRIPTION_PROVIDER to faster_whisper or vosk.")
+    raise RuntimeError("Unknown transcription provider. Set TRANSCRIPTION_PROVIDER to faster_whisper.")

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+import threading
 from dataclasses import dataclass
 
 from app.audio.audio_buffer import AudioChunk
@@ -47,28 +48,32 @@ class WhisperTranscriber:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._model = None
+        self._load_lock = threading.Lock()
         self._initial_prompt = _resolve_initial_prompt(settings)
 
     def load(self) -> None:
         if self._model is not None:
             return
-        try:
-            from faster_whisper import WhisperModel
-        except ImportError as exc:
-            raise RuntimeError("faster-whisper is required for real local transcription.") from exc
+        with self._load_lock:
+            if self._model is not None:
+                return
+            try:
+                from faster_whisper import WhisperModel
+            except ImportError as exc:
+                raise RuntimeError("faster-whisper is required for real local transcription.") from exc
 
-        LOGGER.info(
-            "Loading faster-whisper model '%s' for language '%s' on %s with compute type %s.",
-            self._settings.whisper_model_size,
-            self._settings.whisper_language,
-            self._settings.whisper_device,
-            self._settings.whisper_compute_type,
-        )
-        self._model = WhisperModel(
-            self._settings.whisper_model_size,
-            device=self._settings.whisper_device,
-            compute_type=self._settings.whisper_compute_type,
-        )
+            LOGGER.info(
+                "Loading faster-whisper model '%s' for language '%s' on %s with compute type %s.",
+                self._settings.whisper_model_size,
+                self._settings.whisper_language,
+                self._settings.whisper_device,
+                self._settings.whisper_compute_type,
+            )
+            self._model = WhisperModel(
+                self._settings.whisper_model_size,
+                device=self._settings.whisper_device,
+                compute_type=self._settings.whisper_compute_type,
+            )
 
     def transcribe(self, chunk: AudioChunk) -> TranscriptResult | None:
         if chunk.rms < self._settings.audio_silence_rms_threshold:

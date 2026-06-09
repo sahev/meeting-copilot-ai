@@ -85,21 +85,10 @@ def _check_transcription_configuration(settings: Settings) -> DiagnosticCheck:
             else "Missing faster-whisper. Run pip install -r requirements.txt."
         )
         return DiagnosticCheck("Transcription provider", ok, detail)
-    if provider == "vosk":
-        package_ok = importlib.util.find_spec("vosk") is not None
-        model_ok = bool(settings.vosk_model_path and settings.vosk_model_path.exists())
-        ok = package_ok and model_ok
-        if ok:
-            detail = f"Vosk is configured with model path {settings.vosk_model_path}."
-        elif not package_ok:
-            detail = "Missing vosk. Run pip install -r requirements.txt."
-        else:
-            detail = "Set VOSK_MODEL_PATH to the extracted Vosk model folder."
-        return DiagnosticCheck("Transcription provider", ok, detail)
     return DiagnosticCheck(
         "Transcription provider",
         False,
-        "Set TRANSCRIPTION_PROVIDER to faster_whisper or vosk.",
+        "Set TRANSCRIPTION_PROVIDER to faster_whisper.",
     )
 
 
@@ -128,23 +117,11 @@ def _check_ai_configuration(settings: Settings) -> DiagnosticCheck:
             else "Set STACKSPOT_AUTH_URL, STACKSPOT_CLIENT_ID, STACKSPOT_CLIENT_SECRET, and STACKSPOT_AGENT_ID."
         )
         return DiagnosticCheck("AI provider", ok, detail)
-    if provider == "devin":
-        ok = bool(settings.devin_api_url and settings.devin_api_key)
-        detail = "Devin URL and API key are configured." if ok else "Set DEVIN_API_URL and DEVIN_API_KEY."
-        return DiagnosticCheck("AI provider", ok, detail)
-    if provider == "gemini":
-        ok = bool(settings.gemini_api_url and settings.gemini_api_key and settings.gemini_model)
-        detail = (
-            f"Gemini is configured with model {settings.gemini_model}."
-            if ok
-            else "Set GEMINI_API_KEY and GEMINI_MODEL."
-        )
-        return DiagnosticCheck("AI provider", ok, detail)
     if provider == "groq":
         ok = bool(settings.groq_api_url and settings.groq_api_key and settings.groq_model)
         detail = f"Groq is configured with model {settings.groq_model}." if ok else "Set GROQ_API_KEY and GROQ_MODEL."
         return DiagnosticCheck("AI provider", ok, detail)
-    return DiagnosticCheck("AI provider", False, "Set AI_PROVIDER to stackspot, devin, gemini, or groq.")
+    return DiagnosticCheck("AI provider", False, "Set AI_PROVIDER to stackspot or groq.")
 
 
 def _check_sqlite(settings: Settings) -> DiagnosticCheck:

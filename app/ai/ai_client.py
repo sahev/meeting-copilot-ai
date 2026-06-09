@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from app.ai.providers.base_provider import BaseAiProvider
-from app.ai.providers.devin_provider import DevinProvider
-from app.ai.providers.gemini_provider import GeminiProvider
 from app.ai.providers.groq_provider import GroqProvider
 from app.ai.providers.stackspot_provider import StackSpotProvider
 from app.config import Settings
@@ -26,10 +24,6 @@ def build_ai_provider(settings: Settings) -> BaseAiProvider:
             use_conversation=settings.stackspot_use_conversation,
             streaming=settings.stackspot_streaming,
         )
-    if provider == "devin" and settings.devin_api_url and settings.devin_api_key:
-        return DevinProvider(settings.devin_api_url, settings.devin_api_key)
-    if provider == "gemini" and settings.gemini_api_key:
-        return GeminiProvider(settings.gemini_api_url, settings.gemini_api_key, settings.gemini_model)
     if provider == "groq" and settings.groq_api_key:
         return GroqProvider(settings.groq_api_url, settings.groq_api_key, settings.groq_model)
 

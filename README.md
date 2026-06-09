@@ -1,6 +1,6 @@
 # Meeting Copilot CLI
 
-Meeting Copilot CLI captures real Windows output audio through WASAPI Loopback, transcribes Brazilian Portuguese audio locally with `faster-whisper` or `Vosk`, and displays the live transcript in CMD/PowerShell using `rich`.
+Meeting Copilot CLI captures real Windows output audio through WASAPI Loopback, transcribes Brazilian Portuguese audio locally with `faster-whisper`, and displays the live transcript in CMD/PowerShell using `rich`.
 
 ## Requirements
 
@@ -55,7 +55,6 @@ TRANSCRIPTION_PROVIDER=faster_whisper
 WHISPER_LANGUAGE=pt
 WHISPER_DEVICE=cpu
 WHISPER_COMPUTE_TYPE=int8
-VOSK_MODEL_PATH=models/vosk-model-small-pt-0.3
 AI_PROVIDER=stackspot
 STACKSPOT_AUTH_URL=https://idm.stackspot.com/YOUR_ACCOUNT_REALM/oidc/oauth/token
 STACKSPOT_CLIENT_ID=
@@ -64,11 +63,6 @@ STACKSPOT_AGENT_URL=https://genai-inference-app.stackspot.com
 STACKSPOT_AGENT_ID=
 STACKSPOT_USE_CONVERSATION=false
 STACKSPOT_STREAMING=false
-DEVIN_API_URL=
-DEVIN_API_KEY=
-GEMINI_API_URL=https://generativelanguage.googleapis.com/v1beta
-GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash
 GROQ_API_URL=https://api.groq.com/openai/v1/chat/completions
 GROQ_API_KEY=
 GROQ_MODEL=llama-3.3-70b-versatile
@@ -81,15 +75,6 @@ SUMMARIES_DIR=summaries
 ### Transcription provider
 
 Use `TRANSCRIPTION_PROVIDER=faster_whisper` for best quality with the local faster-whisper model copied into `models/faster-whisper-small`.
-
-Use `TRANSCRIPTION_PROVIDER=vosk` when Hugging Face or large model files are blocked in your environment. Vosk runs offline with a much smaller Portuguese/Brazilian Portuguese model:
-
-```env
-TRANSCRIPTION_PROVIDER=vosk
-VOSK_MODEL_PATH=models/vosk-model-small-pt-0.3
-```
-
-Download `vosk-model-small-pt-0.3.zip`, extract it, and point `VOSK_MODEL_PATH` to the extracted folder. The official Vosk model list reports this small pt-BR model at about 31 MB.
 
 ### Whisper model
 
@@ -139,23 +124,6 @@ STACKSPOT_USE_CONVERSATION=false
 STACKSPOT_STREAMING=false
 ```
 
-Select Devin by setting:
-
-```env
-AI_PROVIDER=devin
-DEVIN_API_URL=
-DEVIN_API_KEY=
-```
-
-Select Gemini by setting:
-
-```env
-AI_PROVIDER=gemini
-GEMINI_API_URL=https://generativelanguage.googleapis.com/v1beta
-GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash
-```
-
 Select Groq by setting:
 
 ```env
@@ -173,18 +141,7 @@ POST {STACKSPOT_AGENT_URL}/v1/agent/{STACKSPOT_AGENT_ID}/chat
 
 The request sends `user_prompt`, `stackspot_knowledge`, `return_ks_in_response`, and `streaming`. Keep `STACKSPOT_STREAMING=false` unless you adapt the app to consume SSE streams. Set `STACKSPOT_USE_CONVERSATION=true` if you want the provider to store the returned `conversation_id` and reuse it on later calls in the same process.
 
-Devin uses the generic JSON provider shape and sends:
-
-```json
-{
-  "prompt": "...",
-  "payload": {}
-}
-```
-
-The Devin endpoint must return either raw text or JSON containing one of these text fields: `output`, `content`, `text`, `message`, `answer`, or `response`.
-
-Gemini uses the Google `generateContent` REST shape. Groq uses the OpenAI-compatible chat completions shape.
+Groq uses the OpenAI-compatible chat completions shape.
 
 ### Context and question generation
 
@@ -208,5 +165,3 @@ Questions are generated only on demand. While a meeting is running, press `F8` o
 - Transcription quality depends on meeting audio quality.
 - Local transcription consumes CPU or GPU.
 - The first Whisper run may download model files through faster-whisper only when using `WHISPER_MODEL_SIZE` instead of `WHISPER_MODEL_PATH`.
-- Vosk is lighter and easier to move through restricted networks, but transcription quality is usually lower than Whisper.
-- The generic Devin endpoint contract may need small adaptation depending on the exact API shape you use.

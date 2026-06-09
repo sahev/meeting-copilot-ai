@@ -21,7 +21,6 @@ class Settings:
     whisper_language: str
     whisper_device: str
     whisper_compute_type: str
-    vosk_model_path: Path | None
     context_refresh_interval_seconds: float
     question_generation_interval_seconds: float
     question_context_snapshot_limit: int
@@ -35,11 +34,6 @@ class Settings:
     stackspot_agent_id: str | None
     stackspot_use_conversation: bool
     stackspot_streaming: bool
-    devin_api_url: str | None
-    devin_api_key: str | None
-    gemini_api_url: str
-    gemini_api_key: str | None
-    gemini_model: str
     groq_api_url: str
     groq_api_key: str | None
     groq_model: str
@@ -90,14 +84,6 @@ def _get_bool(name: str, default: bool) -> bool:
     raise ValueError(f"{name} must be a boolean value.")
 
 
-def _optional_project_path(name: str) -> Path | None:
-    value = _optional(name)
-    if value is None:
-        return None
-    path = Path(value)
-    return path if path.is_absolute() else PROJECT_ROOT / path
-
-
 def _whisper_model_reference() -> str:
     value = os.getenv("WHISPER_MODEL_PATH") or os.getenv("WHISPER_MODEL_SIZE", "small")
     value = value.strip() or "small"
@@ -121,7 +107,6 @@ def load_settings() -> Settings:
         whisper_language=os.getenv("WHISPER_LANGUAGE", "pt").strip() or "pt",
         whisper_device=os.getenv("WHISPER_DEVICE", "cpu").strip() or "cpu",
         whisper_compute_type=os.getenv("WHISPER_COMPUTE_TYPE", "int8").strip() or "int8",
-        vosk_model_path=_optional_project_path("VOSK_MODEL_PATH"),
         context_refresh_interval_seconds=_get_float(
             "CONTEXT_REFRESH_INTERVAL_SECONDS",
             _get_float("QUESTION_GENERATION_INTERVAL_SECONDS", 30.0),
@@ -142,12 +127,6 @@ def load_settings() -> Settings:
         stackspot_agent_id=_optional("STACKSPOT_AGENT_ID"),
         stackspot_use_conversation=_get_bool("STACKSPOT_USE_CONVERSATION", False),
         stackspot_streaming=_get_bool("STACKSPOT_STREAMING", False),
-        devin_api_url=_optional("DEVIN_API_URL"),
-        devin_api_key=_optional("DEVIN_API_KEY"),
-        gemini_api_url=os.getenv("GEMINI_API_URL", "https://generativelanguage.googleapis.com/v1beta").strip()
-        or "https://generativelanguage.googleapis.com/v1beta",
-        gemini_api_key=_optional("GEMINI_API_KEY"),
-        gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash",
         groq_api_url=os.getenv(
             "GROQ_API_URL",
             "https://api.groq.com/openai/v1/chat/completions",

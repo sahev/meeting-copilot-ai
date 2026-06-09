@@ -8,8 +8,9 @@ import time
 from pathlib import Path
 
 from rich.console import Console
+from rich.console import Group
 from rich.live import Live
-from rich.prompt import Prompt
+from rich.text import Text
 
 from app.agents.context_builder_agent import ContextBuilderAgent
 from app.agents.question_generator_agent import QuestionGeneratorAgent
@@ -17,8 +18,8 @@ from app.agents.summary_agent import SummaryAgent
 from app.ai.ai_client import build_ai_provider
 from app.audio.audio_buffer import AudioChunkQueue
 from app.audio.capture import WasapiLoopbackCapture
-from app.config import load_settings
 from app.config import PROJECT_ROOT
+from app.config import Settings, load_settings
 from app.context.context_builder import ContextPipeline
 from app.context.meeting_context import ContextUpdate, MeetingContext
 from app.context.context_store import MeetingContextStore
@@ -26,7 +27,7 @@ from app.diagnostics import render_diagnostics, run_diagnostics
 from app.services.agent_registry import AgentRegistry
 from app.services.prompt_loader import PromptLoader
 from app.storage.sqlite_repository import SQLiteRepository, write_summary_file
-from app.transcription.transcriber_factory import build_transcriber
+from app.transcription.transcriber_factory import Transcriber, build_transcriber
 from app.ui.console import ThreadSafeConsoleState, render_console
 
 
@@ -39,13 +40,51 @@ logging.basicConfig(
 console = Console()
 
 
+class TranscriberWarmup:
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+        self._transcriber = build_transcriber(settings)
+        self._error: Exception | None = None
+        self._ready = False
+        self._lock = threading.Lock()
+        self._thread = threading.Thread(target=self._load, name="transcriber-warmup", daemon=True)
+        self._thread.start()
+
+    def get_transcriber(self, settings: Settings) -> Transcriber | None:
+        if settings == self._settings:
+            if self._error is not None:
+                logging.info("Reusing warmed transcriber after warm-up error: %s", self._error)
+            return self._transcriber
+        return None
+
+    def status_text(self) -> Text:
+        with self._lock:
+            if self._ready:
+                return Text("Transcription model ready", style="green")
+            if self._error is not None:
+                return Text(f"Transcription warm-up failed: {self._error}", style="yellow")
+            return Text("Warming up transcription model in background...", style="dim")
+
+    def _load(self) -> None:
+        try:
+            logging.info("Starting transcription model warm-up.")
+            self._transcriber.load()
+            with self._lock:
+                self._ready = True
+            logging.info("Transcription model warm-up completed.")
+        except Exception as exc:
+            with self._lock:
+                self._error = exc
+            logging.exception("Transcription model warm-up failed.")
+
+
 class MeetingRuntime:
-    def __init__(self) -> None:
-        self.settings = load_settings()
+    def __init__(self, settings: Settings | None = None, transcriber: Transcriber | None = None) -> None:
+        self.settings = settings or load_settings()
         self.audio_queue = AudioChunkQueue()
         self.console_state = ThreadSafeConsoleState()
         self.capture = WasapiLoopbackCapture(self.settings, self.audio_queue, on_error=self._capture_error)
-        self.transcriber = build_transcriber(self.settings)
+        self.transcriber = transcriber or build_transcriber(self.settings)
         self.provider = build_ai_provider(self.settings)
         self.repository = SQLiteRepository(self.settings.database_path)
         self.meeting_id = self.repository.create_meeting(self.settings.meeting_topic)
@@ -305,19 +344,57 @@ def _question_shortcut_pressed() -> bool:
     return pressed
 
 
+def _ask_menu_choice(warmup: TranscriberWarmup | None) -> str:
+    with Live(_render_menu(warmup), console=console, refresh_per_second=4, transient=False) as live:
+        while True:
+            if msvcrt.kbhit():
+                key = msvcrt.getwch()
+                if key in {"1", "2", "3", "4"}:
+                    return key
+                if key == "\r":
+                    return "1"
+                if key == "\x03":
+                    raise KeyboardInterrupt
+            live.update(_render_menu(warmup))
+            time.sleep(0.25)
+
+
+def _render_menu(warmup: TranscriberWarmup | None) -> Group:
+    warmup_status = warmup.status_text() if warmup is not None else Text("Transcription warm-up skipped", style="yellow")
+    return Group(
+        Text("Meeting Copilot CLI", style="bold"),
+        warmup_status,
+        Text(""),
+        Text("1. start"),
+        Text("2. finish"),
+        Text("3. check env"),
+        Text("4. quit"),
+        Text("Select an option [1]: ", style="bold"),
+    )
+
+
 def main() -> None:
+    warmup: TranscriberWarmup | None = None
+    try:
+        warmup_settings = load_settings()
+        warmup = TranscriberWarmup(warmup_settings)
+    except Exception as exc:
+        logging.exception("Could not start transcription model warm-up.")
+        console.print(f"[yellow]Transcription warm-up skipped:[/yellow] {exc}")
+
     while True:
-        console.print("\n[bold]Meeting Copilot CLI[/bold]")
-        console.print("1. start")
-        console.print("2. finish")
-        console.print("3. check env")
-        console.print("4. quit")
-        choice = Prompt.ask("Select an option", choices=["1", "2", "3", "4"], default="1")
+        try:
+            choice = _ask_menu_choice(warmup)
+        except KeyboardInterrupt:
+            console.print("\nGoodbye.")
+            break
 
         if choice == "1":
             runtime: MeetingRuntime | None = None
             try:
-                runtime = MeetingRuntime()
+                settings = load_settings()
+                transcriber = warmup.get_transcriber(settings) if warmup is not None else None
+                runtime = MeetingRuntime(settings=settings, transcriber=transcriber)
                 runtime.start()
             except Exception as exc:
                 logging.exception("Meeting runtime failed.")
